@@ -1,0 +1,9 @@
+# Generado por tools/build_standalone.py
+dist/
+# Versión antigua de un solo archivo (el proyecto ya está separado en carpetas)
+ane-juego-PRUEBA-v*.html
+__pycache__/
+.DS_Store
+Thumbs.db
+# Fotos originales del Memory (copia de seguridad; el juego usa las optimizadas de assets/fotos/memory)
+fotos-originales/
