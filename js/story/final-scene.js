@@ -23,8 +23,8 @@
   // Línea de tiempo (ms)
   // wish = al terminar la canción se pide el deseo (luego todo depende de cuándo sople Ane)
   const AT = { shake: 500, doors: 1300, ane: 2100, cake: 3600, light: 4500, wish: Math.round((T0 + SONG_LEN) * 1000) + 200 };
-  const MIC_LEVEL = 0.12;       // umbral máximo de soplido (RMS); el real se ajusta solo al ruido de la sala
-  const MIC_MIN = 0.03;         // umbral mínimo (para que hablar bajito o el ruido no apaguen velas)
+  const MIC_LEVEL = 0.07;       // umbral máximo de soplido (RMS); el real se ajusta solo al ruido de la sala
+  const MIC_MIN = 0.018;        // umbral mínimo (para que hablar bajito o el ruido no apaguen velas)
   const MIC_CALIB_MS = 600;     // tiempo escuchando la sala antes de empezar a contar soplidos
   const MIC_EVERY_MS = 70;      // soplando sin parar se apaga una vela cada este tiempo
 
@@ -288,7 +288,7 @@
       // 1) calibración: 0,6 s escuchando la sala; el umbral queda claramente por encima del ruido de fondo
       if (m.calib < MIC_CALIB_MS) {
         m.calib += delta; m.calibSum += rms; m.calibN++;
-        if (m.calib >= MIC_CALIB_MS) m.level = Phaser.Math.Clamp((m.calibSum / m.calibN) * 3 + 0.02, MIC_MIN, MIC_LEVEL);
+        if (m.calib >= MIC_CALIB_MS) m.level = Phaser.Math.Clamp((m.calibSum / m.calibN) * 2.2 + 0.012, MIC_MIN, MIC_LEVEL);
       } else if (rms > m.level) {
         m.acc += delta; while (m.acc > MIC_EVERY_MS) { m.acc -= MIC_EVERY_MS; this.blowSome(1); }
       } else m.acc = 0;
