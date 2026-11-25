@@ -23,7 +23,9 @@
   // Línea de tiempo (ms)
   // wish = al terminar la canción se pide el deseo (luego todo depende de cuándo sople Ane)
   const AT = { shake: 500, doors: 1300, ane: 2100, cake: 3600, light: 4500, wish: Math.round((T0 + SONG_LEN) * 1000) + 200 };
-  const MIC_LEVEL = 0.12;       // volumen (RMS) a partir del cual cuenta como soplido
+  const MIC_LEVEL = 0.12;       // umbral máximo de soplido (RMS); el real se ajusta solo al ruido de la sala
+  const MIC_MIN = 0.03;         // umbral mínimo (para que hablar bajito o el ruido no apaguen velas)
+  const MIC_CALIB_MS = 600;     // tiempo escuchando la sala antes de empezar a contar soplidos
   const MIC_EVERY_MS = 70;      // soplando sin parar se apaga una vela cada este tiempo
 
   class FinalScene extends Phaser.Scene {
@@ -229,28 +231,52 @@
     }
 
     // ---------- micrófono (opcional) ----------
-    async startMic() {
+    /**
+     * Pensado para Safari de iPhone/iPad, que es donde más falla el micro en web:
+     * - El juego pone la sesión de audio de iOS en 'playback' (que suene aunque el móvil esté en silencio);
+     *   con ese modo iOS deja el micro mudo, así que mientras se sopla se cambia a 'play-and-record'.
+     * - Canal de audio PROPIO para el micro, creado dentro del toque (si no, iOS lo deja en pausa) y
+     *   conectado al altavoz con volumen 0 (Safari no procesa nodos que no acaban en el altavoz).
+     * - Sensibilidad automática: mide el ruido de la sala 0,6 s y fija el umbral por encima.
+     * - Medidor de volumen en pantalla; si solo llega silencio absoluto, se avisa de que toque la pantalla.
+     */
+    startMic() {
       if (this.mic || this.stage !== 'wish') return;
       const T = G.T.final;
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
-        if (!this.sys.isActive() || this.stage !== 'wish') { stream.getTracks().forEach(t => t.stop()); return; }
-        const c = G.sfx.ctx();
-        if (!c) throw new Error('sin audio');
-        const src = c.createMediaStreamSource(stream), an = c.createAnalyser();
-        an.fftSize = 1024; src.connect(an);
-        this.mic = { stream, src, an, buf: new Float32Array(an.fftSize), acc: 0 };
+      try { if (navigator.audioSession) navigator.audioSession.type = 'play-and-record'; } catch (e) { /* no soportado */ }
+      let mc = null;
+      try { const AC = window.AudioContext || window.webkitAudioContext; mc = new AC(); const r = mc.resume(); r && r.catch && r.catch(() => {}); } catch (e) { mc = null; }
+      const fail = (txt) => {
+        if (mc) { try { mc.close(); } catch (e) { /* nada */ } }
+        this.restoreAudioSession();
         if (this.micBtn) { this.micBtn.destroy(); this.micBtn = null; }
-        if (this.wishHint) this.wishHint.setText(T.micListening);
-      } catch (e) {
-        if (this.micBtn) { this.micBtn.destroy(); this.micBtn = null; }
-        if (this.wishHint) this.wishHint.setText(T.micDenied);
-      }
+        if (this.wishHint) this.wishHint.setText(txt);
+      };
+      if (!mc) return fail(T.micDenied);
+      navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } })
+        .then((stream) => {
+          if (!this.sys.isActive() || this.stage !== 'wish') { stream.getTracks().forEach(t => t.stop()); return fail(''); }
+          const src = mc.createMediaStreamSource(stream), an = mc.createAnalyser(), mute = mc.createGain();
+          an.fftSize = 1024; mute.gain.value = 0;
+          src.connect(an); an.connect(mute); mute.connect(mc.destination);
+          const r = mc.resume(); r && r.catch && r.catch(() => {});
+          this.mic = { stream, src, an, mc, buf: new Float32Array(an.fftSize), acc: 0,
+            calib: 0, calibSum: 0, calibN: 0, level: MIC_LEVEL, listened: 0, maxRms: 0, warned: false };
+          if (this.micBtn) { this.micBtn.destroy(); this.micBtn = null; }
+          if (this.wishHint) this.wishHint.setText(T.micListening);
+          this.micMeter = this.add.graphics().setDepth(21);
+        })
+        .catch(() => fail(T.micDenied));
+    }
+    restoreAudioSession() {
+      try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { /* no soportado */ }
     }
     stopMic() {
+      if (this.micMeter) { this.micMeter.destroy(); this.micMeter = null; }
       if (!this.mic) return;
-      try { this.mic.src.disconnect(); this.mic.stream.getTracks().forEach(t => t.stop()); } catch (e) { /* ya parado */ }
-      this.mic = null;
+      const m = this.mic; this.mic = null;
+      try { m.src.disconnect(); m.stream.getTracks().forEach(t => t.stop()); m.mc.close(); } catch (e) { /* ya parado */ }
+      this.restoreAudioSession();
     }
     update(time, delta) {
       const m = this.mic;
@@ -258,8 +284,31 @@
       m.an.getFloatTimeDomainData(m.buf);
       let sum = 0; for (let i = 0; i < m.buf.length; i++) sum += m.buf[i] * m.buf[i];
       const rms = Math.sqrt(sum / m.buf.length);
-      if (rms > MIC_LEVEL) { m.acc += delta; while (m.acc > MIC_EVERY_MS) { m.acc -= MIC_EVERY_MS; this.blowSome(1); } }
-      else m.acc = 0;
+      m.listened += delta; m.maxRms = Math.max(m.maxRms, rms);
+      // 1) calibración: 0,6 s escuchando la sala; el umbral queda claramente por encima del ruido de fondo
+      if (m.calib < MIC_CALIB_MS) {
+        m.calib += delta; m.calibSum += rms; m.calibN++;
+        if (m.calib >= MIC_CALIB_MS) m.level = Phaser.Math.Clamp((m.calibSum / m.calibN) * 3 + 0.02, MIC_MIN, MIC_LEVEL);
+      } else if (rms > m.level) {
+        m.acc += delta; while (m.acc > MIC_EVERY_MS) { m.acc -= MIC_EVERY_MS; this.blowSome(1); }
+      } else m.acc = 0;
+      // 2) silencio absoluto durante 3 s: el sistema no deja oír el micro -> que toque la pantalla
+      if (!m.warned && m.listened > 3000 && m.maxRms < 0.0005) {
+        m.warned = true;
+        if (this.wishHint) this.wishHint.setText(G.T.final.micSilent);
+      }
+      this.drawMicMeter(rms, m.level, m.calib < MIC_CALIB_MS);
+    }
+    /** Barrita de volumen: se llena al soplar; la marca blanca es hasta dónde hay que llegar. */
+    drawMicMeter(rms, level, calibrating) {
+      const g = this.micMeter; if (!g) return;
+      const W = this.W, w = 220, h = 14, x = W / 2 - w / 2, y = this.H - G.safe.bottom - 112;
+      const k = Math.min(1, rms / (level * 2)), over = rms > level && !calibrating;
+      g.clear();
+      g.fillStyle(0x1b1430, 0.9).fillRoundedRect(x - 3, y - 3, w + 6, h + 6, 5);
+      g.fillStyle(0x4a3c66, 1).fillRect(x, y, w, h);
+      g.fillStyle(over ? 0x3bd16f : 0x9fd3ff, 1).fillRect(x, y, Math.round(w * k), h);
+      g.fillStyle(0xffffff, 1).fillRect(x + w / 2 - 1, y - 4, 3, h + 8);   // umbral (mitad de la barra)
     }
 
     party() {

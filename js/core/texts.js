@@ -95,6 +95,7 @@
       micButton: 'Soplar al micro',
       micListening: '¡Sopla fuerte al micro!\n(o toca la pantalla)',
       micDenied: 'Sin micro: toca la pantalla\npara soplar',
+      micSilent: 'No te oigo... toca la pantalla\npara soplar',
       // Extra al final: con los 7 sellos, desfile de sellos; si faltan, ánimo para conseguirlos
       allStamps: '¡Pasaporte completo!',
       someStamps: (n, total) => `Sellos: ${n}/${total} · ¡a por el resto!`,
