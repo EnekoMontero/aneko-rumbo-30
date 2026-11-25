@@ -37,7 +37,7 @@ def main():
         if rel == 'js/core/namespace.js':     # los recursos van antes que todo lo demás
             code = 'window.ANE_INLINE=' + json.dumps(inline) + ';\n' + code
         return f'<script>/* {rel} */\n{code}</script>'
-    html = re.sub(r'<script src="([^"]+)"></script>', repl, html)
+    html = re.sub(r'<script src="([^"?]+)(?:\?[^"]*)?"></script>', repl, html)   # ignora el ?v=... de versión
     # Iconos y la imagen de la pantalla de carga también incrustados; el manifest no sirve en un archivo suelto
     html = re.sub(r'(src|href)="(assets/icons/[^"]+)"', lambda m: f'{m.group(1)}="{data_uri(m.group(2))}"', html)
     html = re.sub(r'\s*<link rel="manifest"[^>]*>', '', html)

@@ -30,7 +30,7 @@ if txt: errors.append(f'Memory: textos de relleno sin cambiar en js/minigames/me
 
 # 3) Archivos referenciados que no existen (scripts del index y rutas literales de recursos)
 html = read('index.html')
-refs = re.findall(r'<script src="([^"]+)"', html) + re.findall(r'(?:href|src)="((?:assets|fonts)/[^"]+)"', html) + ['fonts/PressStart.ttf']
+refs = re.findall(r'<script src="([^"?]+)', html) + re.findall(r'(?:href|src)="((?:assets|fonts)/[^"]+)"', html) + ['fonts/PressStart.ttf']
 for d, _, files in os.walk(os.path.join(ROOT, 'js')):
     for fn in files:
         refs += re.findall(r"""['"`](assets/[\w./-]+\.(?:png|jpe?g|webp|mp3))['"`]""", open(os.path.join(d, fn), encoding='utf-8').read())
@@ -39,7 +39,7 @@ for r in sorted(set(refs)):
 
 # 4) Sintaxis de todos los JS (si hay Node instalado)
 if shutil.which('node'):
-    for r in re.findall(r'<script src="([^"]+)"', html):
+    for r in re.findall(r'<script src="([^"?]+)', html):
         res = subprocess.run(['node', '--check', os.path.join(ROOT, r)], capture_output=True, text=True)
         if res.returncode: errors.append(f'Error de sintaxis en {r}:\n{res.stderr.strip()[:400]}')
 else:

@@ -113,6 +113,7 @@ Tras cada cambio, GitHub tarda 1-2 minutos en publicarlo.
 | `prepare_photos.py` | Prepara las 6 fotos del Memory |
 | `build_standalone.py` | Genera `dist/ane-juego.html`: todo el juego en un único archivo (copia de seguridad) |
 | `make_icons.py` | Regenera los iconos a partir de `assets/map/final30.png` |
+| `bump_version.py` | Actualiza el número de versión de los scripts: ejecútalo antes de cada publicación para que los móviles cojan la versión nueva |
 | `extract_texts.py` | Genera `TEXTOS.md` con todos los textos del juego (por pantalla, con archivo y línea) para revisarlos |
 
 Música del CrossFit: "Motivator", Kevin MacLeod (incompetech.com), licencia CC BY 4.0.
