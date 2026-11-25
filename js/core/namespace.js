@@ -19,7 +19,7 @@ window.AneGame.asset = (path) => (window.ANE_INLINE && window.ANE_INLINE[path]) 
  * │  ¡PONLO A false ANTES DE PUBLICAR! (python tools/check.py lo comprueba)    │
  * └───────────────────────────────────────────────────────────────────────────┘
  */
-window.AneGame.FORCE_TEST = true;
+window.AneGame.FORCE_TEST = false;
 
 /**
  * MODO PRUEBA (solo con FORCE_TEST = true): todo desbloqueado.
